@@ -157,3 +157,86 @@ Architecture Diagram
                     │ event_hash            │
                     │ final_chain_hash      │
                     └───────────────────────┘
+                    
+Project Structure
+core/
+    hash_engine.py
+
+storage/
+    db.py
+
+repositories/
+    tenant_repository.py
+    run_repository.py
+    event_repository.py
+
+services/
+    tenant_service.py
+    run_service.py
+    audit_service.py
+    verify_service.py
+
+cli/
+    main.py
+
+Installation
+
+Clone the repository:
+
+git clone <repo_url>
+cd tenantaudit
+
+Set Python path (PowerShell):
+$env:PYTHONPATH = ".\src"
+
+Usage
+
+Create Tenant
+python -m tenantaudit.cli.main tenant create "Acme"
+
+List Tenants
+python -m tenantaudit.cli.main tenant list
+
+Create Run
+python -m tenantaudit.cli.main run create <tenant_id>
+
+Append Event
+python -m tenantaudit.cli.main event append <tenant_id> <run_id> <event_type> <json_payload>
+
+Example:
+
+python -m tenantaudit.cli.main event append <T_ID> <R_ID> LOGIN "{""user"":""admin""}"
+
+Seal Run
+python -m tenantaudit.cli.main run seal <tenant_id> <run_id>
+
+Verify Run
+python -m tenantaudit.cli.main verify run <tenant_id> <run_id>
+
+Security Model
+
+The system guarantees:
+
+append-only evidence storage
+
+tamper-evident event chains
+
+tenant-scoped audit histories
+
+deterministic verification
+
+The system does not provide:
+
+distributed consensus
+
+blockchain trustless verification
+
+external timestamp authorities
+
+TenantAudit is an audit ledger, not a blockchain.
+
+License
+
+This project is licensed under the GNU General Public License v3.0.
+
+See the LICENSE file for details.
