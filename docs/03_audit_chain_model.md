@@ -1,147 +1,210 @@
-1. Purpose
+03_audit_chain_model.md
+Overview
 
-TenantAudit 的 Audit Chain Model 用於確保 審計紀錄不可竄改（Tamper-Evident）。
-每一筆 Audit Record 會透過 Hash Chain 方式連接前一筆紀錄，形成可驗證的審計鏈。
+Audit Chain Model 是 TenantAudit 的核心完整性機制。
 
-設計目標：
+每一筆審計事件會透過 加密雜湊鏈（Hash Chain） 與前一筆事件連接，使歷史紀錄具備 防篡改特性（Tamper-Evident）。
 
-保證審計資料完整性（Integrity）
+每個租戶的每個 run 都維護一條獨立的事件鏈。
 
-提供可驗證的歷史紀錄（Verifiable History）
+Tenant
+ └─ Run
+     └─ Event Chain
+Event1 → Event2 → Event3 → ...
 
-防止任意刪除或修改 audit log
+若任一歷史事件被修改，整條鏈的驗證將失敗。
 
-2. Audit Record Structure
+Event Chain Structure
 
-每一筆 audit record 具備以下欄位：
+每個 run 的 audit 事件按時間順序形成鏈。
 
-Field	Type	Description
-id	UUID	唯一識別碼
-tenant_id	string	租戶識別
-action	string	操作類型
-actor	string	執行者
-timestamp	datetime	事件發生時間
-payload	json	相關資料
-prev_hash	string	前一筆 record hash
-record_hash	string	本筆 record hash
-3. Hash Chain Model
+Event1
+Event2
+Event3
+...
+EventN
 
-Audit Chain 採用類似 區塊鏈的鏈式結構：
+每個事件包含：
 
-Record1
-  hash = H(data1)
+prev_hash
+event_hash
 
-Record2
-  prev_hash = hash1
-  hash = H(data2 + hash1)
+形成鏈式結構：
 
-Record3
-  prev_hash = hash2
-  hash = H(data3 + hash2)
+[Event1] → [Event2] → [Event3] → [Event4]
+Event Record Model
 
-鏈式結構如下：
+Audit Event 在資料庫中的邏輯結構：
 
-[Record1] -> [Record2] -> [Record3] -> [Record4]
+Field	Description
+event_id	UUID
+tenant_id	tenant identifier
+run_id	audit run identifier
+event_type	event category
+payload	JSON payload
+created_at	timestamp
+prev_hash	previous event hash
+event_hash	current event hash
+Hash Computation
 
-若中間任一 record 被修改：
+每個事件的 event_hash 透過 SHA256 計算：
 
-該 record 的 hash 會改變
-
-後續所有 record 的 prev_hash 失效
-
-系統可立即偵測異常
-
-4. Hash Calculation
-
-Record Hash 計算方式：
-
-record_hash = SHA256(
-    tenant_id +
-    action +
-    actor +
-    timestamp +
-    payload +
-    prev_hash
+event_hash = SHA256(
+    tenant_id
+    + run_id
+    + event_type
+    + payload
+    + created_at
+    + prev_hash
 )
 
-建議：
+注意事項：
 
-使用 SHA256
+payload 必須 canonical JSON
 
-Payload 需固定序列化（canonical JSON）
+timestamp 必須 固定格式
 
-5. Chain Verification
+字串必須 deterministic serialization
 
-系統可定期執行 Chain Verification：
+否則驗證會失敗。
 
-流程：
+Genesis Event
 
-讀取第一筆 audit record
+每個 run 的第一個事件稱為 Genesis Event。
 
-重新計算 hash
+prev_hash = "GENESIS"
 
-驗證 record_hash 是否一致
+或
 
-檢查下一筆 record 的 prev_hash
+prev_hash = NULL
 
-持續驗證至最後一筆
+取決於實作策略。
 
-若發生以下情況即判定為 Integrity Violation：
+示例：
 
-hash mismatch
+Event1
+prev_hash = GENESIS
+event_hash = H(Event1)
 
-prev_hash mismatch
+Event2
+prev_hash = hash(Event1)
+event_hash = H(Event2 + hash(Event1))
+Chain Progression
 
-record missing
+每次新增事件：
 
-6. Tamper Detection Strategy
+prev_hash = last_event.event_hash
+event_hash = hash(current_event_data + prev_hash)
 
-當 audit chain 發現異常：
+形成：
 
-系統應：
+E1 → E2 → E3 → ... → EN
+Final Chain Hash
 
-記錄安全事件
+當 run 被 seal 時，系統會記錄：
 
-發送警示
+final_chain_hash
 
-鎖定 audit chain 狀態
+計算方式：
 
-啟動調查流程
+final_chain_hash = last_event.event_hash
 
-7. Design Considerations
-Append Only
+Seal 之後：
 
-Audit log 必須為 append-only：
+不允許再新增事件
 
-不允許修改
+chain hash 不會再改變
 
-不允許刪除
+Chain Verification
 
-Immutable Storage
+驗證流程：
 
-建議：
+verify_run(tenant_id, run_id)
 
-Write-once storage
+步驟：
 
-或 Object Storage + versioning
+讀取 run 所有事件
 
-Multi-Tenant Isolation
+依序重新計算 hash
 
-Audit chain 應該 tenant scoped：
+驗證 prev_hash
 
-Tenant A Chain
-A1 -> A2 -> A3
+檢查 event_hash
 
-Tenant B Chain
-B1 -> B2 -> B3
-8. Future Extensions
+驗證 final_chain_hash
 
-可能擴展：
+流程圖：
 
-Merkle Tree verification
+Load Events
+     │
+Recompute Hash
+     │
+Check prev_hash
+     │
+Compare event_hash
+     │
+Next Event
+Verification Failure Cases
 
-External notarization
+驗證會失敗於以下情況：
 
-Remote audit anchoring
+Case	Description
+hash mismatch	event_hash 不一致
+prev_hash mismatch	鏈接斷裂
+missing event	中間事件缺失
+unexpected event order	時序錯誤
+final hash mismatch	seal hash 不一致
+Security Guarantees
 
-Signed audit record
+Audit Chain 提供：
+
+tamper-evident history
+
+deterministic verification
+
+append-only evidence record
+
+tenant scoped isolation
+
+任何歷史修改都會破壞 hash chain。
+
+Limitations
+
+TenantAudit 不是區塊鏈系統。
+
+系統不提供：
+
+distributed consensus
+
+trustless verification
+
+external timestamping
+
+public audit anchors
+
+TenantAudit 是 local audit ledger。
+
+Relationship to Hash Engine
+
+core/hash_engine.py 負責：
+
+event hash calculation
+
+chain verification
+
+final chain hash calculation
+
+該模組必須保證：
+
+deterministic hashing
+
+否則 verification 可能出現 false negative。
+
+Implementation Reference
+
+相關模組：
+
+core/hash_engine.py
+services/audit_service.py
+services/verify_service.py
+repositories/event_repository.py
