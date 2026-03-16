@@ -103,3 +103,56 @@ deterministic chain verification
 
 CLI-first operation
 
+Architecture Diagram
+                    ┌───────────────────────┐
+                    │    User / Operator    │
+                    └──────────┬────────────┘
+                               │
+                               │ CLI commands
+                               ▼
+                    ┌───────────────────────┐
+                    │       CLI Layer       │
+                    │  tenantaudit.cli.main │
+                    └──────────┬────────────┘
+                               │
+                               │ invokes services
+                               ▼
+                    ┌───────────────────────┐
+                    │     Service Layer     │
+                    │───────────────────────│
+                    │ TenantService         │
+                    │ RunService            │
+                    │ AuditService          │
+                    │ VerifyService         │
+                    └──────────┬────────────┘
+                               │
+                               │ uses repositories
+                               ▼
+                    ┌───────────────────────┐
+                    │   Repository Layer    │
+                    │───────────────────────│
+                    │ TenantRepository      │
+                    │ RunRepository         │
+                    │ EventRepository       │
+                    └──────────┬────────────┘
+                               │
+                               │ reads / writes
+                               ▼
+                    ┌───────────────────────┐
+                    │     SQLite Storage    │
+                    │───────────────────────│
+                    │ tenants               │
+                    │ runs                  │
+                    │ audit_events          │
+                    │ exported_artifacts    │
+                    └──────────┬────────────┘
+                               │
+                               │ chain integrity
+                               ▼
+                    ┌───────────────────────┐
+                    │   Hash Chain Engine   │
+                    │───────────────────────│
+                    │ prev_hash             │
+                    │ event_hash            │
+                    │ final_chain_hash      │
+                    └───────────────────────┘
