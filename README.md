@@ -104,6 +104,7 @@ deterministic chain verification
 CLI-first operation
 
 Architecture Diagram
+
                     ┌───────────────────────┐
                     │    User / Operator    │
                     └──────────┬────────────┘
