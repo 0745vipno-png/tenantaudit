@@ -158,7 +158,7 @@ valid	chain integrity confirmed
 invalid	tampering detected
 5. Combined System State Model
 
-把三個狀態一起看會變成：
+三個狀態一起看會變成：
 
 Tenant
    │
