@@ -1,210 +1,182 @@
-03_audit_chain_model.md
-Overview
+Audit Chain Model
 
-Audit Chain Model 是 TenantAudit 的核心完整性機制。
+The audit chain model defines how audit events are cryptographically linked to provide tamper-evident history.
 
-每一筆審計事件會透過 加密雜湊鏈（Hash Chain） 與前一筆事件連接，使歷史紀錄具備 防篡改特性（Tamper-Evident）。
+Each audit event is connected to the previous event through a secure hash, forming a deterministic chain.
 
-每個租戶的每個 run 都維護一條獨立的事件鏈。
+This mechanism ensures that any modification of historical data can be detected during verification.
 
-Tenant
- └─ Run
-     └─ Event Chain
-Event1 → Event2 → Event3 → ...
-
-若任一歷史事件被修改，整條鏈的驗證將失敗。
+Each tenant run maintains an independent audit chain.
 
 Event Chain Structure
 
-每個 run 的 audit 事件按時間順序形成鏈。
+Audit events are stored in chronological order and linked together through hashes.
 
-Event1
-Event2
-Event3
-...
-EventN
+Event1 → Event2 → Event3 → ... → EventN
 
-每個事件包含：
+Each event contains two critical fields:
 
-prev_hash
-event_hash
+prev_hash — the hash of the previous event
 
-形成鏈式結構：
+event_hash — the computed hash of the current event
 
-[Event1] → [Event2] → [Event3] → [Event4]
+This creates a cryptographic linkage between all events in the run.
+
 Event Record Model
 
-Audit Event 在資料庫中的邏輯結構：
+An audit event logically contains the following fields:
 
 Field	Description
-event_id	UUID
+event_id	unique event identifier
 tenant_id	tenant identifier
 run_id	audit run identifier
 event_type	event category
-payload	JSON payload
-created_at	timestamp
-prev_hash	previous event hash
-event_hash	current event hash
+payload	event data (JSON)
+created_at	event timestamp
+prev_hash	hash of the previous event
+event_hash	hash of this event
+
+These fields are used to compute the event hash deterministically.
+
 Hash Computation
 
-每個事件的 event_hash 透過 SHA256 計算：
+Each event hash is computed using a deterministic hashing process.
 
 event_hash = SHA256(
-    tenant_id
-    + run_id
-    + event_type
-    + payload
-    + created_at
-    + prev_hash
+    tenant_id +
+    run_id +
+    event_type +
+    payload +
+    created_at +
+    prev_hash
 )
 
-注意事項：
+Important requirements:
 
-payload 必須 canonical JSON
+payload must use canonical JSON serialization
 
-timestamp 必須 固定格式
+timestamps must use a consistent format
 
-字串必須 deterministic serialization
+field ordering must remain deterministic
 
-否則驗證會失敗。
+If these rules are violated, verification may fail.
 
 Genesis Event
 
-每個 run 的第一個事件稱為 Genesis Event。
+The first event in a run is called the genesis event.
+
+Because no previous event exists, the prev_hash field must use a predefined value.
+
+Example:
 
 prev_hash = "GENESIS"
 
-或
+or
 
 prev_hash = NULL
 
-取決於實作策略。
+The specific value depends on the implementation but must remain consistent.
 
-示例：
-
-Event1
-prev_hash = GENESIS
-event_hash = H(Event1)
-
-Event2
-prev_hash = hash(Event1)
-event_hash = H(Event2 + hash(Event1))
 Chain Progression
 
-每次新增事件：
+For every new event appended to the chain:
 
 prev_hash = last_event.event_hash
-event_hash = hash(current_event_data + prev_hash)
+event_hash = SHA256(current_event_data + prev_hash)
 
-形成：
+This ensures that every event depends on the entire history of the chain.
 
-E1 → E2 → E3 → ... → EN
+If a historical event changes, all subsequent hashes become invalid.
+
 Final Chain Hash
 
-當 run 被 seal 時，系統會記錄：
-
-final_chain_hash
-
-計算方式：
+When a run is sealed, the final state of the chain is recorded.
 
 final_chain_hash = last_event.event_hash
 
-Seal 之後：
+After sealing:
 
-不允許再新增事件
+no new events may be appended
 
-chain hash 不會再改變
+the chain hash becomes immutable
+
+This allows external systems to record or store the final hash as evidence.
 
 Chain Verification
 
-驗證流程：
+Verification recomputes the hash chain from the stored events.
 
-verify_run(tenant_id, run_id)
+verify run <tenant_id> <run_id>
 
-步驟：
+Verification procedure:
 
-讀取 run 所有事件
+load all events for the run
 
-依序重新計算 hash
+recompute event hashes sequentially
 
-驗證 prev_hash
+verify each prev_hash reference
 
-檢查 event_hash
+compare stored event_hash values
 
-驗證 final_chain_hash
+verify the final chain hash
 
-流程圖：
+If all checks succeed, the audit chain is considered valid.
 
-Load Events
-     │
-Recompute Hash
-     │
-Check prev_hash
-     │
-Compare event_hash
-     │
-Next Event
 Verification Failure Cases
 
-驗證會失敗於以下情況：
+Verification fails when any of the following conditions occur:
 
-Case	Description
-hash mismatch	event_hash 不一致
-prev_hash mismatch	鏈接斷裂
-missing event	中間事件缺失
-unexpected event order	時序錯誤
-final hash mismatch	seal hash 不一致
+Condition	Description
+hash mismatch	recomputed event hash differs from stored value
+prev_hash mismatch	chain linkage is broken
+missing event	an event in the chain is missing
+event order corruption	events are not in chronological order
+final hash mismatch	stored final chain hash does not match recomputed hash
 Security Guarantees
 
-Audit Chain 提供：
+The audit chain provides the following guarantees:
 
-tamper-evident history
+tamper-evident audit history
 
-deterministic verification
+deterministic integrity verification
 
-append-only evidence record
+append-only event records
 
-tenant scoped isolation
+tenant-scoped audit isolation
 
-任何歷史修改都會破壞 hash chain。
+Any modification to historical events will break the chain.
 
 Limitations
 
-TenantAudit 不是區塊鏈系統。
+TenantAudit is not a blockchain system.
 
-系統不提供：
+The system does not provide:
 
 distributed consensus
 
 trustless verification
 
-external timestamping
+public ledger replication
 
-public audit anchors
+external timestamp authorities
 
-TenantAudit 是 local audit ledger。
-
-Relationship to Hash Engine
-
-core/hash_engine.py 負責：
-
-event hash calculation
-
-chain verification
-
-final chain hash calculation
-
-該模組必須保證：
-
-deterministic hashing
-
-否則 verification 可能出現 false negative。
+TenantAudit is designed as a local audit ledger with deterministic verification.
 
 Implementation Reference
 
-相關模組：
+Relevant components in the codebase:
 
 core/hash_engine.py
 services/audit_service.py
 services/verify_service.py
 repositories/event_repository.py
+
+The hash_engine module is responsible for:
+
+event hash computation
+
+chain progression
+
+chain verification
+
+The implementation must ensure deterministic hashing behavior.
