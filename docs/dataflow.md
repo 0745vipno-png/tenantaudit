@@ -168,9 +168,6 @@ Artifacts Characteristics
         human readable
         reproducible
         hashable evidence
-核心操作的 Data Flow
-
-接下來是 三個最重要的操作流程。
 
 Flow 1 — Append Audit Event
 User
