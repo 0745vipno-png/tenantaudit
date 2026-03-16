@@ -196,9 +196,12 @@ cd tenantaudit
 Set Python path (PowerShell):
 
 $env:PYTHONPATH = ".\src"
+
 Usage
 Create Tenant
+
 python -m tenantaudit.cli.main tenant create "Acme"
+
 List Tenants
 python -m tenantaudit.cli.main tenant list
 Create Run
