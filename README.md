@@ -37,9 +37,9 @@ Tamper-Evident Hash Chain
 
 Each audit event contains:
 
-the hash of the previous event (prev_hash)
+prev_hash – hash of the previous event
 
-its own computed hash (event_hash)
+event_hash – computed hash of the current event
 
 This forms a cryptographic chain:
 
@@ -53,7 +53,11 @@ Audit events are grouped into runs.
 
 Lifecycle:
 
-create run → open → append events → seal run
+create run
+    ↓
+append events
+    ↓
+seal run
 
 After a run is sealed:
 
@@ -87,21 +91,9 @@ Example output:
 }
 Architecture Overview
 
-The architecture separates command handling, business rules, data persistence, and hash-chain verification into distinct layers.
+The architecture separates command handling, business logic, data persistence, and hash-chain verification into distinct layers.
 
-This layered design keeps:
-
-CLI interaction
-
-business logic
-
-data access
-
-integrity verification
-
-clearly separated.
-
-Design principles:
+Design goals:
 
 tenant isolation
 
@@ -109,146 +101,5 @@ append-only evidence storage
 
 deterministic chain verification
 
-predictable CLI-first operations
+CLI-first operation
 
-Architecture Diagram
-
-                    ┌───────────────────────┐
-                    │    User / Operator    │
-                    └──────────┬────────────┘
-                               │
-                               │ CLI commands
-                               ▼
-                    ┌───────────────────────┐
-                    │       CLI Layer       │
-                    │  tenantaudit.cli.main │
-                    └──────────┬────────────┘
-                               │
-                               │ invokes services
-                               ▼
-                    ┌───────────────────────┐
-                    │     Service Layer     │
-                    │───────────────────────│
-                    │ TenantService         │
-                    │ RunService            │
-                    │ AuditService          │
-                    │ VerifyService         │
-                    └──────────┬────────────┘
-                               │
-                               │ uses repositories
-                               ▼
-                    ┌───────────────────────┐
-                    │   Repository Layer    │
-                    │───────────────────────│
-                    │ TenantRepository      │
-                    │ RunRepository         │
-                    │ EventRepository       │
-                    └──────────┬────────────┘
-                               │
-                               │ reads / writes
-                               ▼
-                    ┌───────────────────────┐
-                    │     SQLite Storage    │
-                    │───────────────────────│
-                    │ tenants               │
-                    │ runs                  │
-                    │ audit_events          │
-                    │ exported_artifacts    │
-                    └──────────┬────────────┘
-                               │
-                               │ chain integrity
-                               ▼
-                    ┌───────────────────────┐
-                    │   Hash Chain Engine   │
-                    │───────────────────────│
-                    │ prev_hash             │
-                    │ event_hash            │
-                    │ final_chain_hash      │
-                    └───────────────────────┘
-                    
-Project Structure
-core/
-    hash_engine.py
-
-storage/
-    db.py
-
-repositories/
-    tenant_repository.py
-    run_repository.py
-    event_repository.py
-
-services/
-    tenant_service.py
-    run_service.py
-    audit_service.py
-    verify_service.py
-
-cli/
-    main.py
-Installation
-
-Clone the repository:
-
-git clone <repo_url>
-cd tenantaudit
-
-Set Python path (PowerShell):
-
-$env:PYTHONPATH = ".\src"
-
-Usage
-Create Tenant
-
-python -m tenantaudit.cli.main tenant create "Acme"
-
-List Tenants
-python -m tenantaudit.cli.main tenant list
-Create Run
-python -m tenantaudit.cli.main run create <tenant_id>
-Append Event
-python -m tenantaudit.cli.main event append <tenant_id> <run_id> <event_type> <json_payload>
-
-Example (PowerShell):
-
-python -m tenantaudit.cli.main event append <T_ID> <R_ID> LOGIN "{""user"":""admin""}"
-Seal Run
-python -m tenantaudit.cli.main run seal <tenant_id> <run_id>
-Verify Run
-python -m tenantaudit.cli.main verify run <tenant_id> <run_id>
-
-Example output:
-
-{
-  "status": "valid",
-  "run_id": "...",
-  "event_count": 3,
-  "final_hash": "..."
-}
-Security Model
-
-The system guarantees:
-
-append-only evidence storage
-
-tamper-evident event chains
-
-tenant-scoped audit histories
-
-deterministic verification
-
-The system does not provide:
-
-distributed consensus
-
-blockchain trustless verification
-
-external timestamp authorities
-
-TenantAudit is an audit ledger, not a blockchain.
-
-License
-
-This project is licensed under the GNU General Public License v3.0.
-
-See the LICENSE file for details.
