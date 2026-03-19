@@ -1,0 +1,60 @@
+1. 環境初始化 (重要！)
+
+請確保你在專案根目錄（包含 src 的資料夾），並設定 Python 路徑：
+
+powershell
+
+# Windows PowerShell
+
+$env:PYTHONPATH = ".\src"
+
+
+2. 建立租戶 (Create Tenant)
+
+⚠️ 防呆提醒： 如果名字重複會報錯 TenantAlreadyExistsError，這代表系統正在保護你的資料唯一性！
+
+bash
+
+python -m tenantaudit.cli.main tenant create "MyDemo_01"
+
+# 成功後請複製輸出的 ID (例如: 107c25e...)
+
+
+3. 開啟稽核階段 (Create Run)
+
+每一組紀錄都必須隸屬於一個「運行階段」。
+
+bash
+
+# 請替換成你剛剛得到的 Tenant ID
+
+python -m tenantaudit.cli.main run create "你的_TENANT_ID"
+
+# 成功後請複製輸出的 Run ID (例如: 34c3744...)
+
+
+4. 寫入不可篡改事件 (Append Event)
+
+模擬一筆 AI 操作紀錄，系統會在此時自動計算 Hash Chain。
+bash
+# 請替換對應的 Tenant ID 與 Run ID
+
+python -m tenantaudit.cli.main event append "TENANT_ID" "RUN_ID" AI_TASK "{""status"":""success""}"
+
+
+5. 封存並驗證 (Seal & Verify) —— 終極測試
+
+一旦封存，該階段即進入「唯讀狀態」，隨後啟動加密驗證確保資料未被竄改。
+bash
+# 1. 封存 (鎖死資料)
+
+python -m tenantaudit.cli.main run seal "TENANT_ID" "RUN_ID"
+
+# 2. 驗證 (重新計算全鏈雜湊)
+python -m tenantaudit.cli.main verify run "TENANT_ID" "RUN_ID"
+
+如果遇到這個狀況請這樣做:ID建立後忘記記下來 這時別慌! 兩種做法:
+
+第一種作法是建一個新的:python -m tenantaudit.cli.main tenant create "TestUser_01"
+
+第二種作法list整個ID 看看到底是誰:python -m tenantaudit.cli.main tenant list
